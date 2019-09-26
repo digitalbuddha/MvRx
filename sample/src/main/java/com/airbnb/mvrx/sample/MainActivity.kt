@@ -1,7 +1,9 @@
 package com.airbnb.mvrx.sample
 
+import android.content.Intent
 import android.os.Bundle
 import com.airbnb.mvrx.BaseMvRxActivity
+import com.airbnb.mvrx.launcher.MvRxLauncherActivity
 
 /**
  * Extend this class to get MvRx support out of the box.
