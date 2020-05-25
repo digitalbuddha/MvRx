@@ -5,8 +5,7 @@ import androidx.annotation.RestrictTo
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
-import com.airbnb.mvrx.workflow.Screen
-
+import com.airbnb.mvrx.workflow.ViewState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -15,15 +14,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.channels.ConflatedBroadcastChannel
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.asFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.dropWhile
-import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
@@ -75,17 +72,15 @@ abstract class BaseMavericksViewModel<S : MvRxState>(
     private val tag by lazy { javaClass.simpleName }
     private val mutableStateChecker = if (debugMode) MutableStateChecker(initialState) else null
 
-    val renderings = ConflatedBroadcastChannel<Screen>()
+    fun startRootWorkflow(props: Props, output: (Any) -> Unit): Flow<ViewState> {
+        return stateFlow.mapLatest { state ->
+            viewState(props, state, output)
+        }
+    }
 
-    abstract suspend fun render(state:S, props: Props, output: (Any) -> Unit)
+    suspend fun childViewState(props: Props, output: (Any) -> Unit) = viewState(props, state, output)
 
-     suspend fun startRendering(props: Props, output: (Any) -> Unit) =
-        stateFlow
-            .flatMapLatest {state->
-                render(state, props, output)
-                renderings.asFlow()
-            }
-
+    abstract suspend fun viewState(props: Props, state: S, output: (Any) -> Unit): ViewState
 
     /**
      * Synchronous access to state is not exposed externally because there is no guarantee that

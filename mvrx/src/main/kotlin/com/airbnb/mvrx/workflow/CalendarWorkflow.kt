@@ -3,13 +3,17 @@ package com.airbnb.mvrx.workflow
 import com.airbnb.mvrx.BaseMavericksViewModel
 import com.airbnb.mvrx.MvRxState
 import com.airbnb.mvrx.Props
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.InternalCoroutinesApi
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
-interface Screen
+interface ViewState
 
+fun doSomethingWith(output: Any) {
+    TODO("Not yet implemented")
+}
 
 @InternalCoroutinesApi
 fun main() {
@@ -19,23 +23,16 @@ fun main() {
 
     //would be lifecycle scope most likely
     MainScope().launch {
-        calendarWorkflow.startRendering("Loading Message") { output -> doSomethingWith(output) }
-            .collect {
-                renderScreens(it)
-            }
+        calendarWorkflow.startRootWorkflow("Loading Message") { output -> doSomethingWith(output) }
+            .collect { }
     }
 }
 
-fun doSomethingWith(output: Any) {
-    TODO("Not yet implemented")
-}
 
-fun renderScreens(it: Screen) {
-    TODO("Not yet implemented")
-}
 
 //Calendar workflow is used for displaying a list of calender events
 //Rather than accessing services itself, this workflow will delegate loading to LoadingWorkflow
+@ExperimentalCoroutinesApi
 @InternalCoroutinesApi
 class CalendarWorkflow(
     private val loadingWorkflow: LoadingWorkflow
@@ -46,42 +43,39 @@ class CalendarWorkflow(
         internal data class DisplayingEvents(val calendarEvents: List<CalendarEvent>) : State()
     }
 
-    sealed class Rendering : Screen {
-        data class Calendar(val calendarEvents: List<CalendarEvent>) : Rendering()
+    sealed class ViewState : com.airbnb.mvrx.workflow.ViewState {
+        data class Calendar(val calendarEvents: List<CalendarEvent>) : ViewState()
     }
 
-    override suspend fun render(state: State, props: Props, output: (Any) -> Unit) {
-        when (state) {
+    override suspend fun viewState(props: Props, state: State, output: (Any) -> Unit): com.airbnb.mvrx.workflow.ViewState {
+        return when (state) {
+            is State.DisplayingEvents -> ViewState.Calendar(state.calendarEvents)
             is State.Loading -> {
-                //we could also collect and emit something different here
-                loadingWorkflow.startRendering(props) { setState { State.DisplayingEvents(it as Events) } }
-                    .collect { renderings.send(it) }
+                val loadingViewState = loadingWorkflow.childViewState(props) { setState { State.DisplayingEvents(it as Events) } }
+                return loadingViewState
             }
-            is State.DisplayingEvents -> renderings.send(Rendering.Calendar(state.calendarEvents))
         }
     }
 }
 
-//Has 1 state: Loading - When a parent workflow renders our initial state we will Rendering a loading data model and fetch data
-//on data result we will set an output on a parent workflow which should trigger displaying of items
 class LoadingWorkflow(private val eventStore: Store<CalendarId, List<CalendarEvent>>
 ) : BaseMavericksViewModel<LoadingWorkflow.LoadingState>(LoadingState, false) {
     object LoadingState : MvRxState
 
-    sealed class Rendering : Screen {
-        data class Loading(val msg: String = "Loading Calenders") : Rendering()
+    sealed class LoadingViewState : com.airbnb.mvrx.workflow.ViewState {
+        data class Loading(val msg: String = "Loading Calenders") : LoadingViewState()
     }
 
-    override suspend fun render(state: LoadingState, props: Props, output: (Any) -> Unit) {
-        renderings.send(Rendering.Loading()) //sent using the parent workflow scope since we did not launch our own
-        suspend {
-            eventStore.get()
-        }.execute {
-            output(it()!!)
-            this
-        }
+    override suspend fun viewState(props: Props, state: LoadingState, output: (Any) -> Unit): LoadingViewState {
+        suspend { eventStore.get() }
+            .execute {
+                output(it()!!)
+                this
+            }
+        return LoadingViewState.Loading() //sent using the parent workflow scope since we did not launch our own
     }
 }
+
 
 
 typealias CalendarId = String
