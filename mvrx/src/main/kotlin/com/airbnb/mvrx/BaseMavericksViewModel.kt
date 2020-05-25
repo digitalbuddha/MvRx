@@ -15,10 +15,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.ConflatedBroadcastChannel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.asFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.dropWhile
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onCompletion
@@ -72,7 +75,16 @@ abstract class BaseMavericksViewModel<S : MvRxState>(
     private val tag by lazy { javaClass.simpleName }
     private val mutableStateChecker = if (debugMode) MutableStateChecker(initialState) else null
 
-    abstract suspend fun render(props: Props, outputAction: (Any) -> Unit): Flow<Screen>
+    val renderings = ConflatedBroadcastChannel<Screen>()
+
+    abstract suspend fun render(state:S, props: Props, output: (Any) -> Unit)
+
+     suspend fun startRendering(props: Props, output: (Any) -> Unit) =
+        stateFlow
+            .flatMapLatest {state->
+                render(state, props, output)
+                renderings.asFlow()
+            }
 
 
     /**

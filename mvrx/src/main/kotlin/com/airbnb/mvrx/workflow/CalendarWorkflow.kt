@@ -5,11 +5,8 @@ import com.airbnb.mvrx.MvRxState
 import com.airbnb.mvrx.Props
 import kotlinx.coroutines.InternalCoroutinesApi
 import kotlinx.coroutines.MainScope
-import kotlinx.coroutines.async
-import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.asFlow
 import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.emitAll
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 
 interface Screen
@@ -23,12 +20,10 @@ fun main() {
 
     //would be lifecycle scope most likely
     MainScope().launch {
-        //render takes a lambda which is called when a child workflow invokes output
-        //render returns a flow which will get all renderings emissions
-        calendarWorkflow.render("Loading Message") { output -> doSomethingWith(output) }
-            .collect {
-                renderScreens(it)
-            }
+        calendarWorkflow.startRendering("Loading Message") { output -> doSomethingWith(output) }
+        .collect {
+            renderScreens(it)
+        }
     }
 }
 
@@ -56,18 +51,14 @@ class CalendarWorkflow(
         data class Calendar(val calendarEvents: List<CalendarEvent>) : Rendering()
     }
 
-    //TODO: when we stop rendering a child, how do we clear it?
-    override suspend fun render(props: Props, output: (Any) -> Unit): Flow<Screen> {
-        return flow {
-            stateFlow.collect {
-                when (it) {
-                    is State.Loading -> {
-                        //we could also collect and emit something different here
-                        emitAll(loadingWorkflow.render(props, outputAction = { setState { State.DisplayingEvents(it as Events) } })) //TODO fix paramterized types in base class
-                    }
-                    is State.DisplayingEvents -> emit(Rendering.Calendar(it.calendarEvents))
-                }
+    override suspend fun render(state: State, props: Props, output: (Any) -> Unit) {
+        when (state) {
+            is State.Loading -> {
+                //we could also collect and emit something different here
+                loadingWorkflow.startRendering(props) { setState { State.DisplayingEvents(it as Events) } }
+                    .collect { renderings.send(it) }
             }
+            is State.DisplayingEvents -> renderings.send(Rendering.Calendar(state.calendarEvents))
         }
     }
 }
@@ -82,16 +73,14 @@ class LoadingWorkflow(private val eventStore: Store<CalendarId, List<CalendarEve
         data class Loading(val msg: String = "Loading Calenders") : Rendering()
     }
 
-    override suspend fun render(props: Props, outputAction: (Any) -> Unit): Flow<Screen> =
-        flow {
-            emit(Rendering.Loading())
-            viewModelScope.launch {
-                async { eventStore.get() }.execute {
-                    outputAction.invoke(it.invoke()!!)  //setting output should trigger the parent to stop rendering this workflow
-                    this
-                }
+    override suspend fun render(state: LoadingState, props: Props, output: (Any) -> Unit) {
+        renderings.send(Rendering.Loading()) //sent using the parent workflow scope since we did not launch our own
+        viewModelScope
+            .launch {
+                output.invoke(eventStore.get())
             }
-        }
+            .invokeOnCompletion { onCleared() } //alternatively we can wait for our parent scope to clean us up
+    }
 }
 
 
@@ -100,5 +89,5 @@ typealias CalendarEvent = String
 typealias Events = List<CalendarEvent>
 
 class Store<T, V> {
-    suspend fun get(): V = TODO()
+    fun get(): V = TODO()
 }
