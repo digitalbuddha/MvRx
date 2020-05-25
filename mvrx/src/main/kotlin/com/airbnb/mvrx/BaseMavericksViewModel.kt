@@ -5,6 +5,8 @@ import androidx.annotation.RestrictTo
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
+import com.airbnb.mvrx.workflow.Screen
+
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -27,6 +29,8 @@ import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.CoroutineContext
 import kotlin.reflect.KProperty1
+
+typealias Props = Any
 
 /**
  * To use Mavericks, make a class MavericksViewModel or YourCompanyViewModel that extends BaseMavericksViewModel and set debugMode.
@@ -67,6 +71,9 @@ abstract class BaseMavericksViewModel<S : MvRxState>(
 
     private val tag by lazy { javaClass.simpleName }
     private val mutableStateChecker = if (debugMode) MutableStateChecker(initialState) else null
+
+    abstract suspend fun render(props: Props, outputAction: (Any) -> Unit): Flow<Screen>
+
 
     /**
      * Synchronous access to state is not exposed externally because there is no guarantee that
