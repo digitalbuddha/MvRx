@@ -5,7 +5,6 @@ import com.airbnb.mvrx.MvRxState
 import com.airbnb.mvrx.Props
 import kotlinx.coroutines.InternalCoroutinesApi
 import kotlinx.coroutines.MainScope
-import kotlinx.coroutines.flow.asFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
@@ -21,9 +20,9 @@ fun main() {
     //would be lifecycle scope most likely
     MainScope().launch {
         calendarWorkflow.startRendering("Loading Message") { output -> doSomethingWith(output) }
-        .collect {
-            renderScreens(it)
-        }
+            .collect {
+                renderScreens(it)
+            }
     }
 }
 
@@ -75,11 +74,12 @@ class LoadingWorkflow(private val eventStore: Store<CalendarId, List<CalendarEve
 
     override suspend fun render(state: LoadingState, props: Props, output: (Any) -> Unit) {
         renderings.send(Rendering.Loading()) //sent using the parent workflow scope since we did not launch our own
-        viewModelScope
-            .launch {
-                output.invoke(eventStore.get())
-            }
-            .invokeOnCompletion { onCleared() } //alternatively we can wait for our parent scope to clean us up
+        suspend {
+            eventStore.get()
+        }.execute {
+            output(it()!!)
+            this
+        }
     }
 }
 
@@ -89,5 +89,5 @@ typealias CalendarEvent = String
 typealias Events = List<CalendarEvent>
 
 class Store<T, V> {
-    fun get(): V = TODO()
+    suspend fun get(): V = TODO()
 }
