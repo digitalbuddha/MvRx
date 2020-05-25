@@ -47,7 +47,7 @@ class CalendarWorkflow(
         data class Calendar(val calendarEvents: List<CalendarEvent>) : ViewState()
     }
 
-    override suspend fun viewState(props: Props, state: State, output: (Any) -> Unit): com.airbnb.mvrx.workflow.ViewState {
+    override suspend fun onStateChange(props: Props, state: State, output: (Any) -> Unit): com.airbnb.mvrx.workflow.ViewState {
         return when (state) {
             is State.DisplayingEvents -> ViewState.Calendar(state.calendarEvents)
             is State.Loading -> {
@@ -66,7 +66,7 @@ class LoadingWorkflow(private val eventStore: Store<CalendarId, List<CalendarEve
         data class Loading(val msg: String = "Loading Calenders") : LoadingViewState()
     }
 
-    override suspend fun viewState(props: Props, state: LoadingState, output: (Any) -> Unit): LoadingViewState {
+    override suspend fun onStateChange(props: Props, state: LoadingState, output: (Any) -> Unit): LoadingViewState {
         suspend { eventStore.get() }
             .execute {
                 output(it()!!)

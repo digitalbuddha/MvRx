@@ -74,13 +74,13 @@ abstract class BaseMavericksViewModel<S : MvRxState>(
 
     fun startRootWorkflow(props: Props, output: (Any) -> Unit): Flow<ViewState> {
         return stateFlow.mapLatest { state ->
-            viewState(props, state, output)
+            onStateChange(props, state, output)
         }
     }
 
-    suspend fun childViewState(props: Props, output: (Any) -> Unit) = viewState(props, state, output)
+    suspend fun childViewState(props: Props, output: (Any) -> Unit) = onStateChange(props, state, output)
 
-    abstract suspend fun viewState(props: Props, state: S, output: (Any) -> Unit): ViewState
+    abstract suspend fun onStateChange(props: Props, state: S, output: (Any) -> Unit): ViewState
 
     /**
      * Synchronous access to state is not exposed externally because there is no guarantee that
