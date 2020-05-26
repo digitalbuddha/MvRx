@@ -18,13 +18,14 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.dropWhile
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
+import kotlinx.coroutines.withContext
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.CoroutineContext
@@ -73,14 +74,12 @@ abstract class BaseMavericksViewModel<S : MvRxState>(
     private val mutableStateChecker = if (debugMode) MutableStateChecker(initialState) else null
 
     fun startRootWorkflow(props: Props, output: (Any) -> Unit): Flow<ViewState> {
-        return stateFlow.mapLatest { state ->
-            onStateChange(props, state, output)
-        }
+        return stateFlow.flatMapLatest { state -> withContext(viewModelScope.coroutineContext) { onStateChange(props, state, output) } }
     }
 
-    suspend fun childViewState(props: Props, output: (Any) -> Unit) = onStateChange(props, state, output)
+    suspend fun childViewState(props: Props, output: (Any) -> Unit) = withContext(viewModelScope.coroutineContext) { onStateChange(props, state, output) }
 
-    abstract suspend fun onStateChange(props: Props, state: S, output: (Any) -> Unit): ViewState
+    abstract suspend fun onStateChange(props: Props, state: S, output: (Any) -> Unit): Flow<ViewState>
 
     /**
      * Synchronous access to state is not exposed externally because there is no guarantee that
