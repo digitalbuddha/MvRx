@@ -3,15 +3,14 @@ package com.airbnb.mvrx.workflow
 import com.airbnb.mvrx.BaseMavericksViewModel
 import com.airbnb.mvrx.MvRxState
 import com.airbnb.mvrx.Props
-import kotlinx.coroutines.CoroutineScope
+import com.airbnb.mvrx.workflow.LoadingWorkflow.CalendarEvent
+import com.airbnb.mvrx.workflow.LoadingWorkflow.CalendarId
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.InternalCoroutinesApi
 import kotlinx.coroutines.MainScope
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.emitAll
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -53,18 +52,17 @@ class CalendarWorkflow(
         data class Calendar(val calendarEvents: List<CalendarEvent>) : ViewState()
     }
 
-    override suspend fun onStateChange(props: Props, state: State, output: (Any) -> Unit): Flow<com.airbnb.mvrx.workflow.ViewState> {
-        val block: suspend FlowCollector<com.airbnb.mvrx.workflow.ViewState>.() -> Unit = {
-            when (state) {
-                is State.DisplayingEvents -> emit(ViewState.Calendar(state.calendarEvents))
-                is State.Loading -> {
-                    emitAll(loadingWorkflow.childViewState(props) { setState { State.DisplayingEvents(it as Events) } })
-                }
+
+    override suspend fun FlowCollector<com.airbnb.mvrx.workflow.ViewState>.onStateChange(state: State, props: Props, output: (Any) -> Unit) {
+        when (state) {
+            is State.DisplayingEvents -> emit(ViewState.Calendar(state.calendarEvents))
+            is State.Loading -> {
+                emitAll(loadingWorkflow.childViewState(props) { setState { State.DisplayingEvents(it as Events) } })
             }
         }
-        return flow(block)
     }
 }
+
 
 class LoadingWorkflow(private val eventStore: Store<CalendarId, List<CalendarEvent>>
 ) : BaseMavericksViewModel<LoadingWorkflow.LoadingState>(LoadingState, false) {
@@ -74,7 +72,7 @@ class LoadingWorkflow(private val eventStore: Store<CalendarId, List<CalendarEve
         data class Loading(val msg: String = "Loading Calenders") : LoadingViewState()
     }
 
-    override suspend fun onStateChange(props: Props, state: LoadingState, output: (Any) -> Unit): Flow<LoadingViewState> = flow {
+    override suspend fun FlowCollector<ViewState>.onStateChange(state: LoadingState, props: Props, output: (Any) -> Unit) {
         emit(LoadingViewState.Loading())//sent using the parent workflow scope since we did not launch our own
         withContext(viewModelScope.coroutineContext) { output(eventStore.get()) }
     }
